@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
@@ -63,7 +64,7 @@ SDL_Renderer *Initialize(int width, int height) {
 	SDL_SetHint("SDL_HINT_RENDER_DRIVER", "opengl");
 	if(IsVM()) {
 		printf("Hypervisor detected: forcing software rendering\n");
-		SDL_putenv("SDL_RENDER_DRIVER=software");
+		putenv("SDL_RENDER_DRIVER=software");
 	}
 	SDL_SetHint("SDL_HINT_RENDER_SCALE_QUALITY", "linear");
 	SDL_SetHint("SDL_HINT_RENDER_VSYNC", "1");
@@ -92,9 +93,9 @@ SDL_Surface *LoadImage(char *input, unsigned long width, unsigned long height) {
 	ImageInfo *info = AcquireImageInfo();
 	strcpy(info->filename, input);
 	Image *image = ReadImage(info, exception);
-	MagickBooleanType enlarging = MagickFalse;
-	if(width > image->columns || height > image->rows)
-		enlarging = MagickTrue;
+	//MagickBooleanType enlarging = MagickFalse;
+	//if(width > image->columns || height > image->rows)
+	//	enlarging = MagickTrue;
 	//Image *scaledImage = ResizeImage(image, width, height, enlarging ? MitchellFilter : LanczosFilter, 1.0, exception);
 	//if(scaledImage == 0)
 	//	MagickError(exception->severity, exception->reason, exception->description);
@@ -214,11 +215,6 @@ int UpdateThread(void *unused) {
 		canvas = SDL_CreateRGBSurface(0, width, height, 32, 0, 0, 0, 0);
 		SDL_Rect centered = { (width - image->w) / 2 , (height - image->h) / 2, image->w, image->h };
 		SDL_BlitSurface(image, 0, canvas, &centered);
-		if(SDL_MUSTLOCK(canvas))
-			SDL_LockSurface(canvas);
-		SDL_UpdateTexture(newTexture, 0, canvas->pixels, width * 4);
-		if(SDL_MUSTLOCK(canvas))
-			SDL_UnlockSurface(canvas);
 		SDL_UnlockMutex(lock);
 		SDL_FreeSurface(image);
 		texturePending = true;
@@ -264,37 +260,58 @@ int main(int argc, char **argv) {
 	lock = SDL_CreateMutex();
 	thread = SDL_CreateThread(UpdateThread, 0, 0);
 	int alpha = 0;
+	Uint32 startTime = 0;
+	Uint32 deltaTime = 0;
+	Uint32 currentFPS = 0;
 
 	while(run) {
+		startTime = SDL_GetTicks();
 		SDL_RenderClear(screen);
+		int startAlpha = alpha;
+
+		if(texturePending)
+			alpha += fadeStep;
+		if(alpha > 255)
+			alpha = 255;
 
 		SDL_LockMutex(lock);
 		SDL_SetTextureAlphaMod(texture, 255 - alpha);
-		SDL_SetTextureAlphaMod(newTexture, alpha);
-
 		SDL_RenderCopy(screen, texture, 0, &position);
 
 		if(texturePending) {
-			alpha += 8;
-			if(alpha >= 255) {
-				if(canvas) {
-					if(SDL_MUSTLOCK(canvas))
-						SDL_LockSurface(canvas);
-					SDL_UpdateTexture(texture, 0, canvas->pixels, width * 4);
-					if(SDL_MUSTLOCK(canvas))
-						SDL_UnlockSurface(canvas);
-					SDL_FreeSurface(canvas);
-					canvas = 0;
-				}
-				texturePending = false;
-				alpha = 0;
+			if(startAlpha == 0) {
+				if(SDL_MUSTLOCK(canvas))
+					SDL_LockSurface(canvas);
+				SDL_UpdateTexture(newTexture, 0, canvas->pixels, width * 4);
+				if(SDL_MUSTLOCK(canvas))
+					SDL_UnlockSurface(canvas);
 			}
+
+			if(alpha >= 255) {
+				if(SDL_MUSTLOCK(canvas))
+					SDL_LockSurface(canvas);
+				SDL_UpdateTexture(texture, 0, canvas->pixels, width * 4);
+				if(SDL_MUSTLOCK(canvas))
+					SDL_UnlockSurface(canvas);
+				SDL_FreeSurface(canvas);
+				canvas = 0;
+				texturePending = false;
+				SDL_SetTextureAlphaMod(newTexture, 255);
+				alpha = 0;
+			} else
+				SDL_SetTextureAlphaMod(newTexture, alpha);
+			SDL_RenderCopy(screen, newTexture, 0, &position);
 		}
-		SDL_RenderCopy(screen, newTexture, 0, &position);
 		SDL_UnlockMutex(lock);
 
 		SDL_RenderPresent(screen);
-				
+
+		deltaTime = SDL_GetTicks() - startTime;
+		if(deltaTime != 0)
+			currentFPS = 1000 / deltaTime;
+
+		//printf("FPS = %u\n", currentFPS);
+
 		while(SDL_PollEvent(&event)) {
 			switch(event.type) {
 				case SDL_QUIT:
