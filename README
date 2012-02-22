@@ -1,1 +1,11 @@
 A slideshow of pictures from your Aperture library.
+
+# apt-get install ruby rubygems sshfs
+# gem install plist
+
+# mount aperture lib from mac:
+# sshfs sjann@callisto.wheelshit.com:/Volumes/Public public
+
+# unmount:
+# fusermount -u public
+
