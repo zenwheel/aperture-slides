@@ -93,38 +93,28 @@ SDL_Surface *LoadImage(char *input, unsigned long width, unsigned long height) {
 	ImageInfo *info = AcquireImageInfo();
 	strcpy(info->filename, input);
 	Image *image = ReadImage(info, exception);
-	//MagickBooleanType enlarging = MagickFalse;
-	//if(width > image->columns || height > image->rows)
-	//	enlarging = MagickTrue;
-	//Image *scaledImage = ResizeImage(image, width, height, enlarging ? MitchellFilter : LanczosFilter, 1.0, exception);
-	//if(scaledImage == 0)
-	//	MagickError(exception->severity, exception->reason, exception->description);
-	//else {
 	Image *scaledImage = image;
 	char geom[128];
 	snprintf(geom, sizeof(geom), "%lux%lu", width, height);
 	//printf("Scaling to %s\n", geom);
 	TransformImage(&scaledImage, 0, geom);
-	{
-		result = SDL_CreateRGBSurface(0, scaledImage->columns, scaledImage->rows, 32, 0, 0, 0, 0);
-		if(result) {
-			unsigned char *pixels = (unsigned char*)result->pixels;
-			SDL_LockSurface(result);
-			const PixelPacket *imagePixels = GetVirtualPixels(scaledImage, 0, 0, scaledImage->columns, scaledImage->rows, exception);
-			for(int y = 0; y < scaledImage->rows; y++) {
-				for(int x = 0; x < scaledImage->columns; x++) {
-					// offset to the correct row (y * result->pitch) and then to the correct column (bytes/pixel * x)
-					int offset = y * result->pitch + result->format->BytesPerPixel * x;
-					int srcOffset = y * scaledImage->columns + x;
-					pixels[offset + 3] = Q(imagePixels[srcOffset].red);
-					pixels[offset + 2] = Q(imagePixels[srcOffset].green);
-					pixels[offset + 1] = Q(imagePixels[srcOffset].blue);
-					pixels[offset + 0] = 0xff;
-				}
+	result = SDL_CreateRGBSurface(0, scaledImage->columns, scaledImage->rows, 32, 0, 0, 0, 0);
+	if(result) {
+		unsigned char *pixels = (unsigned char*)result->pixels;
+		SDL_LockSurface(result);
+		const PixelPacket *imagePixels = GetVirtualPixels(scaledImage, 0, 0, scaledImage->columns, scaledImage->rows, exception);
+		for(int y = 0; y < scaledImage->rows; y++) {
+			for(int x = 0; x < scaledImage->columns; x++) {
+				// offset to the correct row (y * result->pitch) and then to the correct column (bytes/pixel * x)
+				int offset = y * result->pitch + result->format->BytesPerPixel * x;
+				int srcOffset = y * scaledImage->columns + x;
+				pixels[offset + 3] = Q(imagePixels[srcOffset].red);
+				pixels[offset + 2] = Q(imagePixels[srcOffset].green);
+				pixels[offset + 1] = Q(imagePixels[srcOffset].blue);
+				pixels[offset + 0] = 0xff;
 			}
-			SDL_UnlockSurface(result);
 		}
-		//DestroyImage(scaledImage);
+		SDL_UnlockSurface(result);
 	}
 	DestroyImage(scaledImage);
 	DestroyImageInfo(info);
